@@ -9,6 +9,7 @@
 | `skills/platform/macos/` | `platform-macos` | 预留 | macOS 平台相关 Skill |
 | `skills/platform/linux/` | `platform-linux` | 预留 | Linux 平台相关 Skill |
 | `skills/platform/windows/` | `platform-windows` | 预留 | Windows 平台相关 Skill |
+| `skills/development/docs/` | `development-docs` | 已生成 | 开发文档与图表工具相关 Skill |
 
 > 分类与分组可在根目录 [manifest.json](manifest.json) 与 `skills/` 中按需扩展。
 

@@ -9,6 +9,7 @@
   "groups": {
     "platform-macos": "macOS 平台专属 Skill",
     "platform-linux": "Linux 平台专属 Skill",
-    "platform-windows": "Windows 平台专属 Skill"
+    "platform-windows": "Windows 平台专属 Skill",
+    "development-docs": "开发文档与图表工具相关 Skill"
   }
 }
