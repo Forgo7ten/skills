@@ -31,8 +31,10 @@ pnpm run hooks:install
 │   │   ├── linux/
 │   │   └── windows/
 │   └── development/
-│       └── docs/
-│           └── check-mermaid/
+│       ├── docs/
+│       │   └── check-mermaid/
+│       └── workflow/
+│           └── hands-on-teaching-development/
 ├── scripts/
 │   ├── install-hooks.mjs     # 配置项目级 Git Hook
 │   ├── uninstall-hooks.mjs   # 移除项目级 Git Hook 配置

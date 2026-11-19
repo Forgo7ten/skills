@@ -1,0 +1,5 @@
+interface:
+  display_name: "Hands-on Teaching Development"
+  short_description: "逐步开发目标项目、对比用户实现并安全同步 Git 变更"
+policy:
+  allow_implicit_invocation: false
