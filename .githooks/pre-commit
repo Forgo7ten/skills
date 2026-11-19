@@ -1,0 +1,42 @@
+#!/bin/sh
+# Regenerate and stage the derived marketplace whenever its source changes.
+# The source tree must match the index so generated output cannot include
+# unstaged or untracked Skill content that would be absent from the commit.
+set -eu
+
+ROOT=$(git rev-parse --show-toplevel)
+cd "$ROOT"
+
+if git diff --cached --quiet -- skills/ manifest.json .claude-plugin/marketplace.json; then
+  exit 0
+else
+  DIFF_STATUS=$?
+  if [ "$DIFF_STATUS" -ne 1 ]; then
+    echo "[skills] ERROR: unable to inspect the Git index (git diff exit $DIFF_STATUS)." >&2
+    exit "$DIFF_STATUS"
+  fi
+fi
+
+if ! git diff --quiet -- skills/ manifest.json; then
+  echo "[skills] ERROR: unstaged changes exist in skills/ or manifest.json." >&2
+  echo "[skills] Stage or discard those changes before committing." >&2
+  exit 1
+fi
+
+UNTRACKED_SKILL_FILES=$(git ls-files --others --exclude-standard -- skills/)
+if [ -n "$UNTRACKED_SKILL_FILES" ]; then
+  echo "[skills] ERROR: untracked files exist under skills/:" >&2
+  printf '%s\n' "$UNTRACKED_SKILL_FILES" >&2
+  echo "[skills] Add the intended files with git add, or remove them." >&2
+  exit 1
+fi
+
+printf '%s\n' "[skills] Regenerating .claude-plugin/marketplace.json..."
+pnpm run skills:sync
+
+git add -- .claude-plugin/marketplace.json
+
+printf '%s\n' "[skills] Validating the Skill repository..."
+pnpm run skills:check
+
+printf '%s\n' "[skills] Generated marketplace is staged and validation passed."

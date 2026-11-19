@@ -1,0 +1,10 @@
+{
+  "name": "my-agent-skills",
+  "owner": {
+    "name": "Your Name"
+  },
+  "metadata": {
+    "description": "Personal cross-agent Agent Skills collection"
+  },
+  "plugins": []
+}

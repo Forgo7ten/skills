@@ -1,0 +1,21 @@
+{
+  "name": "my-agent-skills",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.4.0",
+  "engines": {
+    "node": ">=22.16.0",
+    "pnpm": ">=11.4.0 <12"
+  },
+  "scripts": {
+    "hooks:install": "node scripts/install-hooks.mjs",
+    "hooks:uninstall": "node scripts/uninstall-hooks.mjs",
+    "skills:sync": "node scripts/sync-marketplace.mjs",
+    "skills:check": "node scripts/validate-skills.mjs",
+    "skills:link": "node scripts/link-skills.mjs",
+    "test": "node --experimental-strip-types --test"
+  },
+  "dependencies": {
+    "yaml": "2.8.1"
+  }
+}

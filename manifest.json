@@ -1,0 +1,14 @@
+{
+  "name": "my-agent-skills",
+  "owner": {
+    "name": "Your Name"
+  },
+  "metadata": {
+    "description": "Personal cross-agent Agent Skills collection"
+  },
+  "groups": {
+    "platform-macos": "macOS 平台专属 Skill",
+    "platform-linux": "Linux 平台专属 Skill",
+    "platform-windows": "Windows 平台专属 Skill"
+  }
+}
