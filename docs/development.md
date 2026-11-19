@@ -26,10 +26,13 @@ pnpm run hooks:install
 │   └── workflows/
 │       └── ci.yml            # CI：检查生成文件、校验 Skill、运行测试
 ├── skills/                   # 所有 Skill 存放根目录（分类目录规范）
-│   └── platform/
-│       ├── macos/
-│       ├── linux/
-│       └── windows/
+│   ├── platform/
+│   │   ├── macos/
+│   │   ├── linux/
+│   │   └── windows/
+│   └── development/
+│       └── docs/
+│           └── check-mermaid/
 ├── scripts/
 │   ├── install-hooks.mjs     # 配置项目级 Git Hook
 │   ├── uninstall-hooks.mjs   # 移除项目级 Git Hook 配置
