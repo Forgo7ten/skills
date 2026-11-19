@@ -1,0 +1,26 @@
+{
+  "name": "hands-on-teaching-development",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "setup": "tsx scripts/setup.ts",
+    "copy-project": "tsx scripts/copy-project.ts",
+    "review-diff": "tsx scripts/review-diff.ts",
+    "backup-worktree": "tsx scripts/backup-worktree.ts",
+    "sync-user": "tsx scripts/sync-user.ts",
+    "checkpoint": "tsx scripts/checkpoint.ts",
+    "typecheck": "tsc --noEmit",
+    "doctor": "node scripts/doctor.mjs",
+    "presetup": "node scripts/doctor.mjs",
+    "test": "tsx --test tests/*.test.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3"
+  }
+}

@@ -10,6 +10,7 @@
     "platform-macos": "macOS 平台专属 Skill",
     "platform-linux": "Linux 平台专属 Skill",
     "platform-windows": "Windows 平台专属 Skill",
-    "development-docs": "开发文档与图表工具相关 Skill"
+    "development-docs": "开发文档与图表工具相关 Skill",
+    "development-workflow": "开发工作流与教学开发相关 Skill"
   }
 }
