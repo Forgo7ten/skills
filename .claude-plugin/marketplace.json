@@ -22,6 +22,14 @@
       "skills": [
         "./skills/development/workflow/hands-on-teaching-development"
       ]
+    },
+    {
+      "name": "platform-macos",
+      "source": "./",
+      "description": "macOS 平台专属 Skill",
+      "skills": [
+        "./skills/platform/macos/macos-launch-agent"
+      ]
     }
   ]
 }

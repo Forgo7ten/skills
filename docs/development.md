@@ -28,6 +28,7 @@ pnpm run hooks:install
 ├── skills/                   # 所有 Skill 存放根目录（分类目录规范）
 │   ├── platform/
 │   │   ├── macos/
+│   │   │   └── macos-launch-agent/
 │   │   ├── linux/
 │   │   └── windows/
 │   └── development/
