@@ -6,7 +6,7 @@
 
 | 分类路径 | Plugin Group | 状态 | 说明 |
 |---|---|---|---|
-| `skills/platform/macos/` | `platform-macos` | 预留 | macOS 平台相关 Skill |
+| `skills/platform/macos/` | `platform-macos` | 已生成 | macOS 平台相关 Skill |
 | `skills/platform/linux/` | `platform-linux` | 预留 | Linux 平台相关 Skill |
 | `skills/platform/windows/` | `platform-windows` | 预留 | Windows 平台相关 Skill |
 | `skills/development/docs/` | `development-docs` | 已生成 | 开发文档与图表工具相关 Skill |

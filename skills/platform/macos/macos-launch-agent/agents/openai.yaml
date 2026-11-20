@@ -1,0 +1,3 @@
+interface:
+  display_name: "macOS LaunchAgent 管理"
+  short_description: "固定自启与定时、XML 扩展，统一安装查询修复卸载"
