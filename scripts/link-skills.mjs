@@ -11,6 +11,8 @@ export const AGENT_TARGET_PRESETS = {
   agents: path.join('.agents', 'skills'),
   // Codex 同样加载 ~/.agents/skills/，指向同一目录避免冗余软链接
   codex: path.join('.agents', 'skills'),
+  gemini: path.join('.gemini', 'skills'),
+  antigravity: path.join('.gemini', 'skills'),
 };
 
 export function expandHome(inputPath) {
@@ -55,10 +57,11 @@ export function parseArgs(argv) {
         const home = os.homedir();
         options.targets.push(path.join(home, AGENT_TARGET_PRESETS.claude));
         options.targets.push(path.join(home, AGENT_TARGET_PRESETS.agents));
+        options.targets.push(path.join(home, AGENT_TARGET_PRESETS.gemini));
       } else if (AGENT_TARGET_PRESETS[next]) {
         options.targets.push(path.join(os.homedir(), AGENT_TARGET_PRESETS[next]));
       } else {
-        throw new Error(`Unknown agent preset: "${next}". Supported: claude, claude-code, codex, agents, all`);
+        throw new Error(`Unknown agent preset: "${next}". Supported: claude, claude-code, codex, agents, gemini, antigravity, all`);
       }
       i += 1;
     } else if (arg.startsWith('--agent=')) {
@@ -67,10 +70,11 @@ export function parseArgs(argv) {
         const home = os.homedir();
         options.targets.push(path.join(home, AGENT_TARGET_PRESETS.claude));
         options.targets.push(path.join(home, AGENT_TARGET_PRESETS.agents));
+        options.targets.push(path.join(home, AGENT_TARGET_PRESETS.gemini));
       } else if (AGENT_TARGET_PRESETS[next]) {
         options.targets.push(path.join(os.homedir(), AGENT_TARGET_PRESETS[next]));
       } else {
-        throw new Error(`Unknown agent preset: "${next}". Supported: claude, claude-code, codex, agents, all`);
+        throw new Error(`Unknown agent preset: "${next}". Supported: claude, claude-code, codex, agents, gemini, antigravity, all`);
       }
     } else if (arg === '--skill' || arg === '-s') {
       const next = args[i + 1];
@@ -206,9 +210,9 @@ Usage: pnpm run skills:link [options] [target-directory]
 Link workspace Skills into local Agent skill directories for development.
 
 Options:
-  -t, --target <path>     Target directory (e.g. ~/.claude/skills, ~/.agents/skills)
-  -a, --agent <name>      Preset agent target: claude, claude-code, codex, agents, all
-                          (codex resolves to ~/.agents/skills; all targets claude and agents)
+  -t, --target <path>     Target directory (e.g. ~/.claude/skills, ~/.agents/skills, ~/.gemini/skills)
+  -a, --agent <name>      Preset agent target: claude, claude-code, codex, agents, gemini, antigravity, all
+                          (codex resolves to ~/.agents/skills; gemini/antigravity resolves to ~/.gemini/skills; all targets claude, agents, and gemini)
   -s, --skill <name>      Only link a specific Skill by name (default: all)
   -f, --force             Overwrite existing symlinks or conflicting directories
   -u, --unlink            Remove symlinks created for workspace Skills
@@ -218,6 +222,7 @@ Options:
 Examples:
   pnpm run skills:link --target ~/.claude/skills
   pnpm run skills:link --agent claude
+  pnpm run skills:link --agent gemini
   pnpm run skills:link --agent agents --skill git-commit-message
   pnpm run skills:link --agent all
   pnpm run skills:link --agent claude --unlink

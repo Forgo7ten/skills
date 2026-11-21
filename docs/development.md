@@ -162,13 +162,14 @@ npx skills list
 
 ### 6.3 本地开发挂载（软链接安装器）
 
-开发与调试 Skill 时，可通过 `pnpm run skills:link` 将仓库内的 Skill 目录通过符号链接（Windows 下为 Junction）直接挂载至本地 Agent 运行时目录（如 `~/.claude/skills` 或 `~/.agents/skills`），无需每次修改后重复复制：
+开发与调试 Skill 时，可通过 `pnpm run skills:link` 将仓库内的 Skill 目录通过符号链接（Windows 下为 Junction）直接挂载至本地 Agent 运行时目录（如 `~/.claude/skills`、`~/.agents/skills` 或 `~/.gemini/skills`），无需每次修改后重复复制：
 
 ```bash
-# 使用预设目标挂载全部 Skill（Codex 默认读取 ~/.agents/skills，与 agents 共用同一目标，避免重复链接）
+# 使用预设目标挂载全部 Skill（Codex 默认读取 ~/.agents/skills，与 agents 共用同一目标；antigravity 别名映射至 ~/.gemini/skills）
 pnpm run skills:link --agent claude
 pnpm run skills:link --agent agents
 pnpm run skills:link --agent codex
+pnpm run skills:link --agent gemini
 pnpm run skills:link --agent all
 
 # 指定自定义目录或单个 Skill

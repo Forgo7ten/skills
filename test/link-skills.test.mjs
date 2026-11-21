@@ -33,11 +33,18 @@ test('parseArgs parses target, agent presets, skill filter and flags', () => {
   const codexOpts = parseArgs(['--agent', 'codex']);
   assert.deepEqual(codexOpts.targets, [path.join(os.homedir(), AGENT_TARGET_PRESETS.agents)]);
 
+  const geminiOpts = parseArgs(['--agent', 'gemini']);
+  assert.deepEqual(geminiOpts.targets, [path.join(os.homedir(), AGENT_TARGET_PRESETS.gemini)]);
+
+  const agyOpts = parseArgs(['--agent', 'antigravity']);
+  assert.deepEqual(agyOpts.targets, [path.join(os.homedir(), AGENT_TARGET_PRESETS.antigravity)]);
+
   const allOpts = parseArgs(['--agent', 'all']);
-  assert.equal(allOpts.targets.length, 2);
+  assert.equal(allOpts.targets.length, 3);
   assert.deepEqual(allOpts.targets, [
     path.join(os.homedir(), AGENT_TARGET_PRESETS.claude),
     path.join(os.homedir(), AGENT_TARGET_PRESETS.agents),
+    path.join(os.homedir(), AGENT_TARGET_PRESETS.gemini),
   ]);
 
   assert.throws(() => parseArgs(['--unknown']), /Unknown argument/);
