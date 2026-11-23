@@ -4,27 +4,29 @@ import { fileURLToPath } from "node:url";
  * Synchronize an approved User Project implementation into Agent Project,
  * or apply an Agent Project commit to User Project when the user opts out of handwriting.
  */
-import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { existsSync, realpathSync } from "node:fs";
+import { join, resolve } from "node:path";
 import {
   arg,
+  commitCodePaths,
   copyEntryNoFollow,
-  ensureParent,
   getGitTreeEntry,
   getIndexEntry,
+  getTeachingQueueCursor,
   getWorktreeState,
   git,
   gitRoot,
   gitText,
+  gitStatus,
+  gitWriteTree,
   indexState,
   parseCli,
-  parseNul,
   parentOrEmptyTree,
-  gitWriteTree,
   pathIn,
+  readExplicitPaths,
   readJson,
   removePath,
-  safeRelativePath,
+  runCli,
   statesEqual,
   treeState,
   type FileState,
@@ -40,6 +42,7 @@ interface ReviewSnapshot {
   agentParent: string;
   paths: string[];
   userStates: Record<string, FileState>;
+  decision?: { choice: "user" | "agent"; reason: string; recordedAt: string };
 }
 
 function resolveRepo(path: string): string {
@@ -47,15 +50,6 @@ function resolveRepo(path: string): string {
   const root = gitRoot(physical);
   if (!root || resolve(root) !== resolve(physical)) throw new Error(`项目必须是独立 Git 仓库：${path}`);
   return root;
-}
-
-function readPathsFile(path: string): string[] {
-  const parsed = JSON.parse(readFileSync(path, "utf8")) as unknown;
-  const values = Array.isArray(parsed) ? parsed : (parsed as { files?: unknown })?.files;
-  if (!Array.isArray(values) || !values.every((item) => typeof item === "string")) {
-    throw new Error(`paths-file 必须是字符串数组，或包含 files 字符串数组的 JSON 对象：${path}`);
-  }
-  return [...new Set(values.map((item) => safeRelativePath(item as string)))].sort();
 }
 
 function loadSnapshot(args: ReturnType<typeof parseCli>, workspace: string): { path: string; snapshot: ReviewSnapshot } {
@@ -86,15 +80,43 @@ function absorb(args: ReturnType<typeof parseCli>): void {
   if (resolve(snapshot.userRepo) !== resolve(user) || resolve(snapshot.agentRepo) !== resolve(agent)) {
     throw new Error("Review 快照与当前 User Project / Agent Project 不匹配");
   }
-  if (gitText(agent, ["rev-parse", "HEAD"]).trim() !== snapshot.agentCommit) {
-    throw new Error("Agent Project 在 Review 后发生了新提交，不能直接吸收；请重新确认当前步骤");
+  // A prepared batch may place later [agent] commits between this step and HEAD.
+  if (gitStatus(agent, ["merge-base", "--is-ancestor", snapshot.agentCommit, "HEAD"]) !== 0) {
+    throw new Error("Review 对应的 Agent Commit 已不在当前历史中，请重新确认教学队列");
   }
   if (snapshot.status === "BASELINE_MISMATCH") {
     throw new Error("Review 显示 User Index 与 Agent 基线不一致；禁止自动吸收，请先恢复或人工核对教学基线。");
   }
+  const queueCursor = getTeachingQueueCursor(agent);
+  if (queueCursor && (queueCursor.status !== "active" || queueCursor.commit !== snapshot.agentCommit)) {
+    throw new Error("教学游标与 Review 对应提交不一致，不能跨步骤吸收用户代码");
+  }
+  if (snapshot.status === "DIFFERENT" && snapshot.decision?.choice !== "user") {
+    throw new Error("Review 存在差异，尚未审计并确认采用用户实现；禁止自动吸收");
+  }
   verifySnapshotStaged(user, snapshot);
 
-  for (const rel of snapshot.paths) {
+  // Preflight *all* changed paths before writing anything into Agent Project.
+  // Blindly copying a user step over a newer prepared step can erase future work.
+  const changedByUser = snapshot.paths.filter((rel) => {
+    const expected = treeState(getGitTreeEntry(agent, snapshot.agentCommit, rel));
+    return !statesEqual(expected, snapshot.userStates[rel]);
+  });
+  const conflicts = changedByUser.filter((rel) => {
+    // Even when a later commit changed this file and then reverted it,
+    // using the old user file could still invalidate future tutorial baselines.
+    const touchedByLaterCommit = gitText(agent, ["log", "--format=%H", `${snapshot.agentCommit}..HEAD`, "--", `:(literal)${rel}`]).trim();
+    const prepared = treeState(getGitTreeEntry(agent, "HEAD", rel));
+    const atStep = treeState(getGitTreeEntry(agent, snapshot.agentCommit, rel));
+    return touchedByLaterCommit.length > 0 || !statesEqual(prepared, atStep);
+  });
+  if (conflicts.length > 0) {
+    throw new Error(`用户实现与提前准备的后续提交修改了相同文件；拒绝覆盖 Agent 项目的未来实现：\n${conflicts.join("\n")}\n请暂停当前教学批次、记录纠偏并重新协调剩余步骤。`);
+  }
+  const outstanding = gitText(agent, ["status", "--porcelain", "--untracked-files=normal"]).trim();
+  if (outstanding) throw new Error("Agent Project 有未提交文件，拒绝在不干净的工作区吸收用户代码");
+
+  for (const rel of changedByUser) {
     const source = pathIn(user, rel);
     const destination = pathIn(agent, rel);
     const state = snapshot.userStates[rel];
@@ -106,14 +128,16 @@ function absorb(args: ReturnType<typeof parseCli>): void {
     copyEntryNoFollow(source, destination);
   }
 
-  // Verify the copied Agent Project files match the exact reviewed User Project snapshot.
-  for (const rel of snapshot.paths) {
+  // Only inspect files we actually copied. Exact matches from older prepared steps
+  // must not overwrite or be compared against later Agent implementations.
+  for (const rel of changedByUser) {
     const actual = getWorktreeState(agent, rel);
     if (!statesEqual(actual, snapshot.userStates[rel])) throw new Error(`同步后校验失败：${rel}`);
   }
   console.log(JSON.stringify({
     status: "ABSORBED",
     paths: snapshot.paths,
+    copiedPaths: changedByUser,
     snapshot: snapshotPath,
     note: "代码已同步到 Agent Project；请更新 development-log.md / development-plan.md / teaching-state.md，再使用 checkpoint.ts 创建 [user] Commit。",
   }, null, 2));
@@ -148,20 +172,48 @@ export function rollbackFailedAgentApply(
 function applyAgent(args: ReturnType<typeof parseCli>): void {
   const userArg = arg(args, "user-dir");
   const agentArg = arg(args, "agent-dir");
-  const commitArg = arg(args, "agent-commit");
-  const pathsFile = arg(args, "paths-file");
-  if (!userArg || !agentArg || !commitArg || !pathsFile) {
-    throw new Error("apply-agent 需要 --user-dir、--agent-dir、--agent-commit 和 --paths-file");
+  if (!userArg || !agentArg) {
+    throw new Error("apply-agent 需要 --user-dir 和 --agent-dir");
   }
   const user = resolveRepo(userArg);
   const agent = resolveRepo(agentArg);
   const workspace = resolve(arg(args, "workspace") ?? process.cwd());
-  const commit = gitText(agent, ["rev-parse", `${commitArg}^{commit}`]).trim();
+  const queueCursor = getTeachingQueueCursor(agent);
+  const requestedCommit = arg(args, "agent-commit") ?? queueCursor?.commit;
+  if (!requestedCommit) {
+    throw new Error("当前没有激活的教学队列，apply-agent 需要提供 --agent-commit <sha>");
+  }
+  const commit = gitText(agent, ["rev-parse", `${requestedCommit}^{commit}`]).trim();
+  if (queueCursor && (queueCursor.status !== "active" || queueCursor.commit !== commit)) {
+    throw new Error(`只能移植当前待学步骤 ${queueCursor.stepId} (${queueCursor.commit})，不能跳步或在批次暂停时移植`);
+  }
+  if (gitStatus(agent, ["merge-base", "--is-ancestor", commit, "HEAD"]) !== 0) {
+    throw new Error(`Agent Commit 不在当前历史中：${commit}`);
+  }
   const subject = gitText(agent, ["show", "-s", "--format=%s", commit]).trim();
   if (!subject.startsWith("[agent]")) throw new Error(`只能移植 [agent] Commit，当前提交为：${subject}`);
   const parent = parentOrEmptyTree(agent, commit);
-  const paths = readPathsFile(pathsFile);
-  if (paths.length === 0) throw new Error("没有需要移植的文件路径");
+  const explicitPaths = readExplicitPaths(args);
+  const paths = explicitPaths ?? (queueCursor && queueCursor.commit === commit && queueCursor.paths.length ? queueCursor.paths : commitCodePaths(agent, commit));
+  if (paths.length === 0) throw new Error("没有需要移植的文件路径；请通过 --path 或 --paths-file 指定");
+
+  // If this step was already reviewed as DIFFERENT, enforce the user's recorded choice.
+  // Direct acceptance without an existing review remains supported.
+  const reviewPath = join(workspace, ".teaching", "review", "latest.json");
+  if (existsSync(reviewPath)) {
+    const recorded = readJson<ReviewSnapshot>(reviewPath);
+    if (recorded.agentCommit === commit && resolve(recorded.agentRepo) === agent &&
+        resolve(recorded.userRepo) === user && recorded.status === "DIFFERENT") {
+      if (recorded.decision?.choice !== "agent") {
+        throw new Error("当前步骤有尚未明确选择 Agent 方案的差异 Review，禁止自动覆盖用户代码");
+      }
+      const changedSinceReview = recorded.paths.filter((rel) =>
+        !statesEqual(getWorktreeState(user, rel), recorded.userStates[rel]));
+      if (changedSinceReview.length) {
+        throw new Error(`用户代码在确认采用 Agent 方案后发生变更，必须重新 Review：${changedSinceReview.join(", ")}`);
+      }
+    }
+  }
 
   // Before cleaning anything, ensure the User Project index is the expected base.
   const baselineMismatch: string[] = [];
@@ -218,11 +270,11 @@ function printHelp(): void {
 
 用法：
 
-1. 吸收已经 Review 并由用户 git add 的实现：
+1. 吸收已 Review 并精确暂存的用户实现：
    npx tsx sync-user.ts absorb --user-dir <path> --agent-dir <path> --workspace <workspace> [--snapshot <latest.json>]
 
 2. 用户选择直接接受 Agent 实现：
-   npx tsx sync-user.ts apply-agent --user-dir <path> --agent-dir <path> --workspace <workspace> --agent-commit <sha> --paths-file <paths.json>
+   npx tsx sync-user.ts apply-agent --user-dir <path> --agent-dir <path> --workspace <workspace> [--agent-commit <sha>] [--path <file>...] [--paths-file <paths.json>]
 
 absorb 会验证暂存区与 Review 快照一致，只同步指定步骤文件，不创建 Commit。
 apply-agent 默认先备份并清理 User Project 未暂存工作区，保留暂存区，然后通过 git apply --index 应用 Agent Patch。
@@ -239,4 +291,4 @@ function main(): void {
 }
 
 const direct = process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
-if (direct) main();
+if (direct) runCli(main);

@@ -1,6 +1,6 @@
 ---
 name: hands-on-teaching-development
-description: 手把手带用户实现最终项目的教学开发模式。AI 研究一个或多个 Example Project，在独立 Agent Project 中逐步实现并提交；用户可在 User Project 手写并接受 Review，也可明确要求直接移植 Agent 实现。用户说“教学模式 / teach 模式 / 手把手教学”时进入，说“继续教学”时恢复，说“退出教学模式 / cancel teach”时退出。
+description: 手把手教学开发。AI 研究多个 Example Project，在 Agent Project 中可一次完成整个功能并提交多个小 Commit；用户随后按教学队列逐 Commit 在 User Project 手写/Review 或直接接受。使用本地进度索引、需求偏好纠偏日志支持跨会话恢复。触发：教学模式、teach 模式、手把手教学、继续教学；退出：退出教学模式、cancel teach。
 ---
 
 # Hands-on Teaching Development
@@ -21,9 +21,10 @@ description: 手把手带用户实现最终项目的教学开发模式。AI 研�
 2. 每个 Example Project 可以贡献一个局部功能、设计思想，也可以贡献大部分实现；不要求完整吸收。
 3. AI 必须独立判断 Example Project 的优缺点，不机械照搬。
 4. 若更优方案会改变已确认的产品方向、架构边界或重要取舍，先向用户解释并征求意见。
-5. User Project 初始化完成后，默认禁止 AI 写入；Review、读取、构建和测试不属于修改业务代码。
-6. Agent Project 每个小步骤单独 Commit；用户实现通过 Review 后，或用户明确接受 Agent 实现后，在 Agent Project 创建 `[user]` Commit。
+5. User Project 初始化完成后，默认禁止 AI 写入；Review、读取、构建和测试不属于修改业务代码。不得因用户尚未写完或存在差异而自行代写、补齐或静默修改 User Project。
+6. Agent Project 每个教学步骤仍对应一个小粒度 Commit，但允许一次连续开发一个模块/大功能、提前准备多个 `[agent]` Commit；用户按队列逐 Commit 学习。
 7. 不提交 User Project，不修改 Example Project。
+8. **严格遵守交互停顿边界**：向用户汇报步骤、指出差异与推荐方案、或询问选型/确认后，**必须立即结束本轮并等待用户下一轮明确回复**。严禁在同一轮内替用户做出 `decide --choice user|agent` 决策、代跑 `apply-agent` 或代写 User Project 代码。
 
 ## 2. 触发与退出
 
@@ -58,7 +59,10 @@ workspace/
     └── docs/
         ├── development-plan.md
         ├── development-log.md
-        └── teaching-state.md
+        ├── teaching-state.md     # 机器可读的双游标状态索引
+        ├── NOTES.md             # 长期有效的用户约定与纠偏
+        ├── MISSION.md           # 最终目标、学习动机与成功标准
+        └── RESOURCES.md         # 示例项目可参考的位置与版本
 ```
 
 `examples/` 是普通目录，允许实体项目和符号链接共存。User Project 通过 `workspace/user-project` 符号链接访问。Agent Project 位于 workspace 根目录，目录名由用户确认。
@@ -189,40 +193,46 @@ npm --prefix <skill-dir> run setup -- agent-init --workspace <workspace> --agent
 - 用户实现吸收了哪些代码、保留了哪些用户改进。
 - 构建/测试结果和对应 Commit。
 
-原则上追加历史记录，不随意重写已完成步骤。
+`DIFFERENT` 时还应记录 Agent/User 两方案的优劣、Agent 推荐与理由、用户实现带来的新启发（如有）、最终选择；原则上只追加，不随意重写已完成步骤。
+
+### `docs/MISSION.md` — 开发与学习的共同目标
+
+保持一屏以内，明确为什么要开发、最终用户想独立掌握什么、成功标准和不做的范围；方向变化必须先向用户确认，不复制 `development-plan.md` 的详细需求表。
+
+### `docs/RESOURCES.md` — Example Project 资料索引
+
+记录有价值的示例项目、版本或 Git SHA、具体文件/方法定位、采用和不采用的理由；只读示例项目，不复制完整源码或整个文件树。
+
+### `docs/NOTES.md` — 长期有效约定
+
+由 Agent 直接以 Markdown 维护，格式可按项目需要自由组织（例如按全局/模块分组或条目列表）。只存用户已确认的长期需求、偏好、决策和纠偏；遇到新旧矛盾时明确废止或移出旧约定，避免冲突规则同时生效。一次 Review 的选择、Agent 未确认的建议和短期教学反馈不得直接提升为长期规则。
 
 ### `docs/teaching-state.md` — 当前状态
 
-记录当前阶段、模块、步骤、Agent Commit、步骤文件列表、Review 状态、Review 快照、待用户暂存、待同步、待创建 `[user]` Commit、最近备份路径、未完成 Patch 操作和阻塞事项。它用于跨会话恢复，不替代计划和日志。
+JSON 区块由 `progress.ts` 维护（Agent/User 双游标、当前批次与待学队列），下方自由 Markdown 区块可由 Agent 按需记录短期教学提示。Review 快照与备份保存在 workspace 的 `.teaching/` 下；`progress.ts status` 汇总这些状态供跨会话恢复，不替代计划和日志。
 
-## 6. 开发计划与步骤粒度
+## 6. 开发计划、教学批次与步骤粒度
 
-1. 根据用户目标决定实现全部产品还是指定模块/功能。
-2. 分析 Example Project，比较可借鉴实现，明确采用/不采用的部分。
-3. 编写整体计划和模块依赖。
-4. 每次进入新模块时询问用户优先级。
-5. 一个小函数或独立小功能是默认步骤粒度；一个步骤可以涉及多个文件。
-6. 复杂功能主动拆分，但不为凑数量过度拆分。
-7. 每个 Agent 步骤尽量对应一个独立 Git Commit。
+1. 根据最终产品的目标决定实现全部产品还是某个模块；比较 Example Project，明确吸收范围与技术取舍。
+2. **开发粒度**与**教学交互粒度**分离：Agent 可以连续开发一个功能/大功能，形成多个小粒度 `[agent]` Commit；不要求写完一个 Commit 就打断思考等待用户。
+3. 每个 Commit 尽量是可解释、可验证的小功能，一个步骤可以涉及多个文件；不要为了凑 Commit 过度拆分，也不要把大功能压为单次巨大 Commit。
+4. 批次准备完成后，将其中各 `[agent]` Commit（SHA、步骤 ID、标题、涉及文件）登记为有序教学队列。User Project 按队列逐步实现或接受；Agent Project 可以领先多个 Commit。
+5. 分别维护 **Agent 已准备进度** 与 **User 已完成进度**；计划中的模块状态也应区分这两个维度。
+6. 批次期间如出现用户实现与后续已准备的代码冲突，不擅自覆盖、不重写用户代码；暂停并核对后续步骤，必要时明确作废未教学的旧队列，再基于用户实现重做。
 
-## 7. Agent 手把手实现循环
+具体状态脚本、准备批次、暂停以及进度恢复命令见 [references/batch-and-progress.md](references/batch-and-progress.md)。Review 评估格式与轻量自适应教学原则见 [references/review-and-teaching.md](references/review-and-teaching.md)。
 
-每个步骤按以下流程执行：
+## 7. Agent 批量实现与教学循环
 
-1. 更新 `teaching-state.md`，标记当前模块、步骤、文件清单和状态。
-2. 在 Agent Project 实现一个小功能；不在 User Project 写业务代码。
-3. 新增/修改代码时补充中文教学型注释，解释重要函数职责、关键逻辑、设计原因和容易误解的机制；不要求每行都注释。
-4. 运行项目适用的构建、测试或静态检查。
-5. 更新 `development-plan.md`、`development-log.md`、`teaching-state.md`。
-6. 使用 `checkpoint.ts` 精确暂存本步骤代码与本次修改的 `docs/development-plan.md`、`docs/development-log.md`、`docs/teaching-state.md`，检查提交文件清单，**在同一 Commit 原子提交代码和教学记录**。
-7. 告诉用户：实现了什么、修改哪些文件/位置、关键代码含义、如何查看和验证。
-8. 停止并等待用户；不要主动实现下一个步骤。
+1. 在开始开发新模块/大功能前先问用户优先级；先核对 `MISSION.md`、`NOTES.md` 与适用的 `RESOURCES.md`，再制定小步骤计划。根据 `teaching-state.md` 中的短期教学提示调整**未准备的**步骤粒度，已提交的教学 Commit 不自动改写。
+2. AI 可以在 Agent Project **连续**实现多个小功能：每步加中文教学注释，进行必要的构建/测试，并把代码与当步变更的计划/日志/状态文档一并通过 `checkpoint.ts` 创建 `[agent]` Commit。
+3. 在每个小 Commit 中写清楚改动范围和目的；每个 Commit 都可独立供用户查看，避免一次大改造成教学难度。
+4. 批次完成后运行 `progress.ts prepare --batch-id <id> --module <模块> --auto` 自动收集未登记的 `[agent]` Commit 并注册教学队列（默认自动跳过已完成的旧批次与 `[user]` 节点之前的提交，也可用 `--from <基线SHA>` / `--to <目标Rev>` 精确限定范围，或用 `--steps-file` 自定义覆盖）；将更新后的 `teaching-state.md` 与计划一并提交为教学文档检查点。
+5. 汇报本批次实现的功能、各 Commit 及学习顺序；给出**第一个待学习 Commit** 的文件、关键位置与验收要点，然后停下等待用户。
+6. 用户完成当前步骤后按第 8 节 Review、暂存、按需吸收，先运行 `progress.ts complete` 更新双游标，再更新文档并创建 `[user]` Commit。
+7. 当前批次未完成时，不得把 Agent HEAD 最新 Commit 当成用户应做的下一步；由 `progress.ts status` 获取教学游标。
 
-Commit 格式：
-
-```text
-[agent] feat(scope): 添加某个小功能
-```
+不同批次允许重新规划和开发；已准备的多个 Commit 不要求与用户的 `[user]` Commit 在 Git 历史中交替出现。
 
 ## 8. 用户手写实现与 Review
 
@@ -244,25 +254,16 @@ Commit 格式：
 
 脚本按当前步骤明确的文件清单比较文件内容、路径存在状态、符号链接目标和可识别文件模式，不依赖原始 Patch 文本格式完全相同。
 
-在 Agent Project 中为当前步骤准备一个 JSON 文件，例如 `workspace/.teaching/review/current-step-paths.json`：
-
-```json
-[
-  "src/config/ConfigLoader.java",
-  "src/config/ConfigOptions.java"
-]
-```
-
-运行：
+运行（激活教学队列时自动读取当前待学 Commit 与文件路径，无需每次手写路径 JSON；单步模式或扩展审查范围时可通过 `--agent-commit`、`--path` 或 `--paths-file` 覆盖）：
 
 ```bash
 npm --prefix <skill-dir> run review-diff -- review \
   --user-dir <workspace>/user-project \
   --agent-dir <workspace>/<agent-project-name> \
-  --workspace <workspace> \
-  --agent-commit <当前步骤的agent-commit> \
-  --paths-file <workspace>/.teaching/review/current-step-paths.json
+  --workspace <workspace>
 ```
+
+**批次教学时默认自动锁定队列当前待学 Commit**；传入其他步骤的 SHA 会拒绝跳步。Review 的比较基线为该 Commit 的父版本，不是 Agent 最新提交。
 
 脚本结果：
 
@@ -270,37 +271,51 @@ npm --prefix <skill-dir> run review-diff -- review \
 - `DIFFERENT`：Index 基线匹配但代码不同。先审查差异部分，根据风险决定是否扩大到完整逻辑审查。
 - `BASELINE_MISMATCH`：User Index 与 Agent Commit 父版本不一致。不得误判为用户实现错误或自动通过；AI 需分析基线差异，必要时咨询用户。
 
-脚本会在 `workspace/.teaching/review/latest.json` 保存 Review 快照，并生成 `agent.patch`、`user.patch`、`user-extra.patch`、`paths.json`、`user-untracked/` 和 `user-extra/`。如果 User Project 还有当前步骤清单之外的未暂存改动/未跟踪文件，返回 `DIFFERENT` 并列出 `extraUserPaths`；AI 判断它们是否属于本步骤，必要时扩展文件清单后重新 Review。脚本只读 User Project，不执行 `git add`。
+`review` 一次 JSON 输出 `diffs.userVsAgent`（当前用户实现与 **指定** Agent Commit 最终版本的直接差异）、`diffs.userPatch`、`diffs.agentPatch`、`diffs.extraUserPatch`、`different`、`baselineMismatch`、`extraUserPaths` 和 `whitespaceOnlyCandidates`，**不要求 Agent 再读一次补丁文件**。只在超大差异被显式标记 `truncated: true` 时读取保存的完整报告；可以用 `--max-inline-bytes` 调整单项内联限制，最大 2 MiB。`whitespaceOnlyCandidates` 只是提示，Python 缩进、字符串、宏等对空白敏感的实现必须审计，不得据此直接放行。
 
-### 8.3 AI 审查原则
+脚本会在 `workspace/.teaching/review/latest.json` 保存 Review 快照，并生成 `user-vs-agent.diff`、`agent.patch`、`user.patch`、`user-extra.patch` 和文件清单。如果 User Project 还有当前步骤清单之外的未暂存改动/未跟踪文件，返回 `DIFFERENT` 并列出 `extraUserPaths`；AI 判断是否属于本步骤，必要时扩展范围后重新 Review。`review` 只读 User Project，不执行 `git add`。
 
-- 完全一致：不重复做深入逻辑审查；构建和测试仍需验证。
-- 存在差异：优先审查差异部分，检查逻辑、边界条件、异常处理、资源释放、安全性和潜在 Bug；必要时扩大到完整审查。
-- 代码思路、命名、结构可以不同。只要逻辑正确且无 Bug，不要求用户照抄 Agent 实现。
-- 有问题：指出文件、位置、原因和修正方向；不代替用户修改 User Project。等待用户修正后重新 Review。
-- 通过：先保留 Review 快照，再提示用户精确暂存当前步骤文件。
+### 8.3 先审计，再决定保留哪种实现（强制）
 
-### 8.4 用户暂存与复核
+- `EXACT_MATCH`：执行必要的构建/测试；通过后可直接进行 8.4 的精确暂存，无需用户再次选择。
+- `DIFFERENT`：**先使用本次 `review` 返回的差异内容进行审计**。至少判断差异属于空白/命名/风格、等价的设计替代、功能增减、风险/潜在 Bug 或基线/无关修改。必要时检查上下文和完整实现；不要把不一致直接视为错误。
+- 只有风格差异：解释影响（含语言中空白可能改变语义的情况），也让用户选择采用教学 Commit 或保留自己的写法；**不替用户默认做决定**。
+- 等价实现或用户有更好的设计：**必须比较两方案优劣、维护/安全/性能取舍、对后续 Commit 的影响，并明确推荐哪一种及理由**；若用户实现有新启发，列为候选建议，不擅自扩展需求。然后**询问用户采用 `agent` 还是 `user`**。用户确认长期取舍时才更新 `docs/NOTES.md`。
+- 存在 Bug、未实现、明显风险：提供具体文件位置、原因和建议；**不能把有缺陷的代码标记为审查通过并吸收**。让用户修正后重新 Review，或者明确选择教学 Commit 方案。
+- `BASELINE_MISMATCH`：先处理偏移，不运行 `decide` / `stage-reviewed` / `absorb`。
 
-Review 通过后提示用户执行精确路径的 `git add`，例如：
+向用户说明审查结论、优劣对比与推荐后，**必须停止本轮并等待用户明确回复**；收到用户的明确选择后，才能在下一轮执行 `decide`（实质差异可附带可选的 `--recommend` 和 `--inspiration`，纯风格差异无需机械填表）：
 
 ```bash
-git -C <workspace>/user-project add -- src/config/ConfigLoader.java src/config/ConfigOptions.java
+npm --prefix <skill-dir> run review-diff -- decide \
+  --workspace <workspace> --choice user|agent \
+  --reason "审查结论与用户确认的选择" \
+  [--recommend agent|user] [--inspiration "用户实现带来的新启发"]
 ```
 
-不得使用 `git add .` 或 `git add -A` 代替当前步骤的精确暂存。
+`decide` 只在用户明确确认后记录选型，不会自动修改两个项目。Bug 未修复不得建议吸收 User 版本。具体 Review 与用户选择写入 `development-log.md`；只有可复用且用户确认的长期约定才写 `NOTES.md`。详见 [references/review-and-teaching.md](references/review-and-teaching.md)。
 
-随后运行：
+### 8.4 精确暂存与快照复核
+
+- `EXACT_MATCH`：构建/测试通过后，可让 Agent 执行 `stage-reviewed`，不再要求用户手动输入 `git add`。
+- `DIFFERENT` 且用户确认 **采用自己的实现**：Agent 审计通过、`decide --choice user` 后才能执行 `stage-reviewed`。
+- `DIFFERENT` 且用户确认 **采用教学 Commit**：**不要**执行 `stage-reviewed`，而是运行第 9 节 `sync-user.ts apply-agent`；它会先备份用户工作区、按当前 Commit 应用 Patch 并暂存。该操作会替换未暂存半成品，必须在用户确认选择后进行。
 
 ```bash
+npm --prefix <skill-dir> run review-diff -- stage-reviewed \
+  --user-dir <workspace>/user-project --workspace <workspace>
+
+# 仅在用户手工 git add 或跨轮复核暂存区时单独执行：
 npm --prefix <skill-dir> run review-diff -- verify-staged \
-  --user-dir <workspace>/user-project \
-  --workspace <workspace>
+  --user-dir <workspace>/user-project --workspace <workspace>
 ```
 
-只有返回 `VERIFIED` 才能同步。若 Review 后用户又修改了文件，或暂存内容与快照不一致，必须重新 Review。
+`stage-reviewed` 在暂存前重新核验 User Index 基线和本次审查的工作区快照；只运行精确路径的 `git add -A -- <paths>`，不会执行 `git add .`，不创建 User Commit，也不覆盖之前已暂存的历史步骤，且在暂存后立即完成与 `verify-staged` 等价的校验（因此 `stage-reviewed` 返回 `STAGED` 后可直接进入 `absorb`，无需重复运行 `verify-staged`）。若用户自行手工 `git add` 或在跨轮后继续，须先运行 `verify-staged` 返回 `VERIFIED`。任何快照失效或构建/测试产生未审查的源码修改，均须重新 Review。
 
-### 8.5 吸收用户实现
+### 8.5 按需吸收到 Agent Project 并完成检查点
+
+- **`EXACT_MATCH`**：`stage-reviewed` 成功后 User 实现已与教学 Commit 完全一致，**无需调用 `sync-user.ts absorb`**。直接执行 `progress.ts complete`（如有激活批次），更新开发日志/计划，用 `checkpoint.ts` 创建 `[user] docs(scope): ...` Commit 即可。
+- **`DIFFERENT` 且用户确认 `--choice user`**：在 `stage-reviewed` 成功后、**修改 Agent Project 文档或运行 `progress.ts complete` 之前**（保持 Agent 工作区干净），运行：
 
 ```bash
 npm --prefix <skill-dir> run sync-user -- absorb \
@@ -309,12 +324,11 @@ npm --prefix <skill-dir> run sync-user -- absorb \
   --workspace <workspace>
 ```
 
-脚本只将快照中已验证的步骤文件从 User Project 同步到 Agent Project，不修改 User Project。
+`absorb` 会对 `DIFFERENT` 强制检查 Review 快照中已记录 `choice=user`；未选择时拒绝同步。脚本只吸收与教学 Commit **真正不同** 的用户代码，不允许未经确认吸收，也不修改 User Project。若用户采用教学 Commit，按第 9 节应用后只提交 `[user]` 文档记录，不以“用户改进”名义吸收代码。
 
-然后 AI 更新计划、日志和状态，使用 `checkpoint.ts` 将本步代码与发生修改的三份教学文档**一并提交**为 `[user]` Commit。
+吸收完成后，执行 `progress.ts complete` 推进用户游标，更新开发日志、计划与必要的长期笔记，再使用 `checkpoint.ts` 精确提交为 `[user]` Commit。
 
-- 有代码差异并吸收：例如 `[user] feat(config): 吸收用户实现的配置读取逻辑`。
-- 代码完全一致：没有代码变更需要复制，但仍更新开发记录并创建 `[user] docs(config): 记录用户完成配置读取手写实现`。
+若该用户步骤与 Agent 已准备的后续 Commit 修改相同文件，`absorb` 应拒绝覆盖；暂停队列，协调未来实现，不得擅自替换后续代码。
 
 ## 9. 用户明确要求直接移植 Agent 实现
 
@@ -329,15 +343,13 @@ npm --prefix <skill-dir> run sync-user -- absorb \
 - User Project Index 对应文件必须与 Agent Commit 父版本一致。
 - 若暂存区基线不一致，停止，不清理、不覆盖，先交给 AI 分析。
 
-执行：
+执行（激活教学队列时自动取当前待学 Commit 与文件路径；无队列时传入 `--agent-commit <sha>`，必要时通过 `--path` / `--paths-file` 覆盖）：
 
 ```bash
 npm --prefix <skill-dir> run sync-user -- apply-agent \
   --user-dir <workspace>/user-project \
   --agent-dir <workspace>/<agent-project-name> \
-  --workspace <workspace> \
-  --agent-commit <当前agent-commit> \
-  --paths-file <workspace>/.teaching/review/current-step-paths.json
+  --workspace <workspace>
 ```
 
 脚本行为：
@@ -348,7 +360,7 @@ npm --prefix <skill-dir> run sync-user -- apply-agent \
 4. 验证 User Index 和工作树与 Agent Commit 对应文件一致。
 5. 失败时尝试恢复工作区备份；备份保留。
 
-应用成功后运行必要构建/测试，更新 Agent Project 开发日志和状态，并创建 `[user]` Commit 记录用户接受 Agent 实现。User Project 不创建 Commit。
+应用成功后运行必要构建/测试；若处于批次队列中先运行 `progress.ts complete --mode accepted --review APPLIED`，再更新 Agent Project 开发日志与计划并创建 `[user]` Commit 记录用户接受 Agent 实现。User Project 不创建 Commit。
 
 ### 9.2 用户明确要求保留半成品
 
@@ -404,7 +416,7 @@ npm --prefix <skill-dir> run backup-worktree -- restore --user-dir <workspace>/u
 - `scope`：模块或功能。
 - `description`：简洁描述本次实际修改。
 
-使用 `checkpoint.ts` 精确暂存并提交：
+使用 `checkpoint.ts` 精确暂存并提交（常规少量文件直接重复传 `--path`，文件较多时可改用 `--paths-file`）：
 
 ```bash
 npm --prefix <skill-dir> run checkpoint -- \
@@ -413,26 +425,21 @@ npm --prefix <skill-dir> run checkpoint -- \
   --type feat \
   --scope config \
   --message "添加配置文件读取" \
-  --paths-file <本次提交文件列表.json>
+  --path src/config.ts \
+  --path docs/development-plan.md \
+  --path docs/development-log.md \
+  --path docs/teaching-state.md
 ```
 
-脚本要求 Agent Project 暂存区在提交前干净，只暂存明确指定的路径，并检查暂存文件列表；如果三份核心教学文档有修改但未列入 `--paths-file`，将拒绝提交。Git 身份未配置时停止，不修改全局配置。不得提交 User Project。
+脚本要求 Agent Project 暂存区在提交前干净，只暂存明确指定的路径，并检查暂存文件列表；如果 `development-plan.md`、`development-log.md`、`teaching-state.md`、`NOTES.md`、`MISSION.md` 或 `RESOURCES.md` 有修改但未列入 `--path` / `--paths-file`，将拒绝提交。Git 身份未配置时停止，不修改全局配置。不得提交 User Project。
 
-## 12. 跨会话恢复
+## 12. 跨会话恢复（先读索引，按需展开）
 
-用户说“继续教学”或重新进入 Skill 时：
-
-1. 读取 Agent Project 的 `docs/teaching-state.md`。
-2. 读取 `docs/development-plan.md`。
-3. 阅读 `docs/development-log.md` 最近记录。
-4. 检查 Agent Project `git status --short` 和最近 Commit。
-5. 检查 User Project `git status --short`、暂存区和工作区。
-6. 检查 `workspace/.teaching/review/latest.json` 是否仍对应当前 Agent Commit。
-7. 检查 `workspace/.teaching/backup/current/manifest.json` 是否存在待恢复备份。
-8. 如有未完成的 Review、暂存验证、Patch 应用或备份恢复，先恢复安全状态，不得直接开始下一步。
-9. 从 `teaching-state.md` 当前锚点继续；不得只依赖对话记忆猜测。
-
-恢复会话时不得自动清理 User Project 未暂存差异。
+1. **优先运行** `npm --prefix <skill-dir> run progress -- status --agent-dir <Agent Project>`（可加 `--json`），一次取得双进度、待学 Commit、未登记提交和阻塞状态；同时直接阅读简短的 `NOTES.md`（及 `teaching-state.md` 下的短期教学提示），按需阅读 `MISSION.md` 和相关 `RESOURCES.md`，不要每次全文读取开发日志。
+2. 检查 Agent Project / User Project 的 Git 状态、当前 Review 快照和工作区备份；若索引与实际 Git 提交不一致，先停止自动推进，核对进度。
+3. 仅在需要细节时读取 `development-plan.md` 当前模块、`development-log.md` 最近步骤以及具体的源码/Commit。
+4. 对旧版只有非结构化 `teaching-state.md` 的工作区，执行 `progress.ts init` 并**人工核对旧状态**；脚本保留旧文档，不从对话记忆猜测游标。
+5. 有未完成的 Review、暂存验证、Patch 应用或备份恢复时，先保证安全，不自动清理 User Project。
 
 ## 13. 脚本清单
 
@@ -440,27 +447,30 @@ npm --prefix <skill-dir> run checkpoint -- \
 |---|---|
 | `scripts/setup.ts` | workspace、示例项目导入、User Project 链接、Git 基线、Agent Project 初始化 |
 | `scripts/copy-project.ts` | 复制 User Project；排除 `.git` 和 Git ignore 匹配项；保留内部符号链接 |
-| `scripts/review-diff.ts` | 比较 User 工作树、Index 基线和 Agent Commit；保存 Review 快照；验证用户暂存 |
+| `scripts/review-diff.ts` | 自动输出内联差异、保存快照、记录用户选型；按快照精确暂存并验证 |
 | `scripts/backup-worktree.ts` | 备份、清理和恢复 User Project 未暂存工作区 |
 | `scripts/sync-user.ts` | 吸收用户已审查实现；或备份后应用 Agent Patch |
 | `scripts/checkpoint.ts` | 精确暂存 Agent Project 文件并创建 `[agent]` / `[user]` Commit |
 | `scripts/common.ts` | 脚本共享的 Git、路径、文件和快照工具 |
-| `scripts/doctor.mjs` | 检查 Node.js、Git 和 Skill 依赖环境 |
+| `scripts/doctor.mjs` | 检查 Node.js、Git 和 TypeScript 执行环境（Node 22.6+ 支持免安装运行） |
+| `scripts/run.mjs` | 零依赖脚本启动器：优先使用已安装的 `tsx`，否则在 Node 22.6+ 自动回退 `--experimental-strip-types` |
+| `scripts/progress.ts` | 双游标、批次队列自动收集与跨会话状态汇总 |
 
-脚本使用 Node.js 标准库和 Git CLI，不引入额外业务运行时依赖。建议 Node.js 20+；在 Skill 目录执行 `npm install`、`npm run doctor`、`npm test`，从任意工作目录通过 `npm --prefix <skill-dir> run <script> -- ...` 运行。
+脚本使用 Node.js 标准库和 Git CLI，不引入额外业务运行时依赖。Node.js 22.6+ 无需在 Skill 目录执行 `npm install`，直接通过 `npm --prefix <skill-dir> run <script> -- ...` 运行；Node.js 20.0–22.5 需先在 Skill 目录执行 `npm install`。
 
 ## 14. 每轮交互要求
 
-- 每完成一个 Agent 步骤，必须告诉用户改了什么、位置在哪里、为什么这样实现，然后等待用户。
+- Agent 可连续准备多个小 Commit；批次开发完成后汇报各步骤并等待用户，不必每做一小步就停止。
 - 用户问问题时先解释，不因用户提问自动进入下一步骤。
-- 用户说实现完成或要求 Review 时，先运行自动 Diff 脚本。
+- 用户说实现完成或要求 Review 时，先运行自动 Diff；存在差异时根据首次 diff 审计，实质差异需对比双方优劣并提出明确推荐，然后**停止本轮等待用户回复**，收到明确选择后再记录 `decide`，禁止自动吸收或代用户决策。
 - 用户选择直接移植时，先按第 9 节检查基线和备份，再应用 Patch。
 - 逻辑错误时指出问题并等待用户修改；不得代修 User Project，除非用户明确授权。
 - 不要求用户照抄 Agent 代码；正确的用户改进应被吸收到 Agent Project。
-- 所有状态变更都要更新 `teaching-state.md`；完成步骤要更新计划和日志。
+- 开发是首要目标：仅在用户明确要求更细讲解、Review 暴露反复障碍或用户确认已有基础时，在 `teaching-state.md` 自由区块记录短期教学提示，轻量调整后续讲解与尚未准备的步骤；不建立独立学习档案或能力评分。
+- 双游标与批次队列通过 `progress.ts` 写入 `teaching-state.md`；用户确认的新长期要求/偏好/纠偏由 Agent 直接维护在 `NOTES.md` 并随检查点提交。计划与开发日志仍按步骤维护。
 
 ## 15. 环境自检与回归测试
 
-- 首次操作前运行 `npm --prefix <skill-dir> run doctor`；依赖缺失时先让用户执行 `npm install`。`npm run setup` 会自动运行 `presetup` 预检。
+- 首次操作前运行 `npm --prefix <skill-dir> run doctor`；Node 22.6+ 支持免安装原生运行，无需执行 `npm install`；仅在 Node 20.0–22.5 且缺少 `tsx` 时再安装依赖。`npm run setup` 会自动运行 `presetup` 预检。
 - 修改脚本后运行 `npm test`，覆盖 Root Commit、新文件二进制 Diff、悬空链接、暂存区回滚及文档同提交。
 - Skill 保留 `agents/openai.yaml` 调用元数据；在支持该配置的宿主中关闭隐式调用。

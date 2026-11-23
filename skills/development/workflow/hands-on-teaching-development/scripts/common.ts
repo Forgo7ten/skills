@@ -67,6 +67,32 @@ export function requireArg(args: CliArgs, key: string): string {
   return value;
 }
 
+/** Read paths from repeated `--path` flags and/or `--paths-file <json>`. Returns undefined if neither is given. */
+export function readExplicitPaths(args: CliArgs): string[] | undefined {
+  const inline = argsAll(args, "path");
+  const file = arg(args, "paths-file");
+  if (!file && inline.length === 0) return undefined;
+  const values = [...inline];
+  if (file) {
+    const parsed = JSON.parse(readFileSync(file, "utf8")) as unknown;
+    const fromFile = Array.isArray(parsed) ? parsed : (parsed as { files?: unknown })?.files;
+    if (!Array.isArray(fromFile) || !fromFile.every((item) => typeof item === "string")) {
+      throw new Error(`paths-file 必须是字符串数组，或包含 files 字符串数组的 JSON 对象：${file}`);
+    }
+    values.push(...(fromFile as string[]));
+  }
+  return [...new Set(values.map((item) => safeRelativePath(item)))].sort();
+}
+
+export function runCli(fn: () => void): void {
+  try {
+    fn();
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
+}
+
 export function run(command: string, argv: string[], options: { cwd?: string; input?: Buffer | string; allowCodes?: number[] } = {}) {
   const result = spawnSync(command, argv, {
     cwd: options.cwd,
@@ -337,4 +363,43 @@ export function ensureNoPathCollision(path: string): void {
     if (error instanceof Error && error.message.startsWith("目标位置已存在")) throw error;
     if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
   }
+}
+
+export const CORE_TEACHING_DOCS = [
+  "docs/development-plan.md",
+  "docs/development-log.md",
+  "docs/teaching-state.md",
+  "docs/NOTES.md",
+  "docs/MISSION.md",
+  "docs/RESOURCES.md",
+] as const;
+
+export function commitCodePaths(repo: string, commit: string): string[] {
+  const paths = parseNul(git(repo, ["diff-tree", "--root", "--no-commit-id", "--name-only", "-r", "-z", commit]));
+  return paths.filter((path) => !(CORE_TEACHING_DOCS as readonly string[]).includes(path));
+}
+
+/** Locate the next teaching commit from the durable local queue.
+ * Returns undefined when no batch is active or paused (legacy projects, fresh projects, or finished batches).
+ */
+export function getTeachingQueueCursor(agent: string): { stepId: string; commit: string; status: string; paths: string[] } | undefined {
+  const file = join(agent, "docs", "teaching-state.md");
+  if (!existsSync(file)) return undefined;
+  const content = readFileSync(file, "utf8");
+  const beginMarker = "<!-- teaching-state-index:start -->";
+  const endMarker = "<!-- teaching-state-index:end -->";
+  const begin = content.indexOf(beginMarker);
+  if (begin < 0) return undefined;
+  const end = content.indexOf(endMarker, begin + beginMarker.length);
+  if (end < 0) throw new Error("teaching-state.md 状态索引损坏（缺少结束标记）");
+  const state = JSON.parse(content.slice(begin + beginMarker.length, end).trim()) as {
+    version?: number;
+    batch?: { status: string; nextIndex: number; steps: Array<{ id: string; commit: string; paths?: string[] }> } | null;
+  };
+  if (state.version !== 2) throw new Error("不支持的 teaching-state.md 状态索引版本");
+  if (!state.batch || state.batch.status === "finished") return undefined;
+  const next = state.batch.steps[state.batch.nextIndex];
+  if (!next) throw new Error("教学队列当前游标不存在；停止自动操作并核对本地状态");
+  const paths = Array.isArray(next.paths) ? [...new Set(next.paths.map((p) => safeRelativePath(p)))].sort() : [];
+  return { stepId: next.id, commit: next.commit, status: state.batch.status, paths };
 }

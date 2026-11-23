@@ -1,22 +1,23 @@
 {
   "name": "hands-on-teaching-development",
-  "version": "1.1.0",
+  "version": "1.4.0",
   "private": true,
   "type": "module",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "setup": "tsx scripts/setup.ts",
-    "copy-project": "tsx scripts/copy-project.ts",
-    "review-diff": "tsx scripts/review-diff.ts",
-    "backup-worktree": "tsx scripts/backup-worktree.ts",
-    "sync-user": "tsx scripts/sync-user.ts",
-    "checkpoint": "tsx scripts/checkpoint.ts",
+    "setup": "node scripts/run.mjs setup.ts",
+    "copy-project": "node scripts/run.mjs copy-project.ts",
+    "review-diff": "node scripts/run.mjs review-diff.ts",
+    "backup-worktree": "node scripts/run.mjs backup-worktree.ts",
+    "sync-user": "node scripts/run.mjs sync-user.ts",
+    "checkpoint": "node scripts/run.mjs checkpoint.ts",
+    "progress": "node scripts/run.mjs progress.ts",
     "typecheck": "tsc --noEmit",
     "doctor": "node scripts/doctor.mjs",
     "presetup": "node scripts/doctor.mjs",
-    "test": "tsx --test tests/*.test.mjs"
+    "test": "node scripts/run.mjs --test tests/*.test.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.13.4",

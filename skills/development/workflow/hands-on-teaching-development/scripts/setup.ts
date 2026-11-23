@@ -22,6 +22,7 @@ import {
   arg,
   argsAll,
   assertGitIdentity,
+  CORE_TEACHING_DOCS,
   createSymlink,
   ensureNoPathCollision,
   git,
@@ -31,6 +32,7 @@ import {
   gitHead,
   isWithin,
   parseCli,
+  runCli,
 } from "./common.ts";
 import { copyProject } from "./copy-project.ts";
 
@@ -247,16 +249,24 @@ function agentInitCommand(args: ReturnType<typeof parseCli>): void {
   ensureTemplate(join(templatesDir, "development-plan.md"), join(agentProject, "docs", "development-plan.md"));
   ensureTemplate(join(templatesDir, "development-log.md"), join(agentProject, "docs", "development-log.md"));
   ensureTemplate(join(templatesDir, "teaching-state.md"), join(agentProject, "docs", "teaching-state.md"));
+  ensureTemplate(join(templatesDir, "NOTES.md"), join(agentProject, "docs", "NOTES.md"));
+  ensureTemplate(join(templatesDir, "MISSION.md"), join(agentProject, "docs", "MISSION.md"));
+  ensureTemplate(join(templatesDir, "RESOURCES.md"), join(agentProject, "docs", "RESOURCES.md"));
 
   const agentRoot = gitRoot(agentProject);
   if (agentRoot && resolve(agentRoot) !== resolve(agentProject)) throw new Error(`Agent Project 不是独立 Git 仓库：${agentRoot}`);
   if (!agentRoot) git(agentProject, ["init"]);
   if (!gitHead(agentProject)) {
     git(agentProject, ["add", "-A"]);
-    for (const doc of ["docs/development-plan.md", "docs/development-log.md", "docs/teaching-state.md"]) {
+    for (const doc of CORE_TEACHING_DOCS) {
       git(agentProject, ["add", "-f", "--", doc]);
     }
-    assertGitIdentity(agentProject);
+    try {
+      assertGitIdentity(agentProject);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      throw new Error(`${detail}\nAgent Project 目录与模板已就绪（${agentProject}）；配置仓库级或全局身份后重新运行 setup.ts agent-init 即可续接完成初始提交，无需删除目录。`);
+    }
     git(agentProject, ["commit", "-m", "[agent] initial(init): 初始化项目基础结构"]);
     console.log(`已创建 Agent Project 初始 Commit：${gitText(agentProject, ["rev-parse", "--short", "HEAD"]).trim()}`);
   } else {
@@ -271,13 +281,13 @@ function printHelp(): void {
 分阶段用法：
 
 1. 创建 workspace 结构、导入示例项目、创建 User Project 链接并复制 AGENTS.md：
-   npx tsx setup.ts workspace --workspace . --example /path/to/example-a --example name=/path/to/example-b --user-project /path/to/user-project
+   npm --prefix <skill-dir> run setup -- workspace --workspace <dir> --example /path/to/example-a --example name=/path/to/example-b --user-project /path/to/user-project
 
 2. AI 检查或初始化 User Project 后，建立 Git 基线：
-   npx tsx setup.ts user-baseline --workspace .
+   npm --prefix <skill-dir> run setup -- user-baseline --workspace <dir>
 
 3. 用户确认 Agent Project 名称后，创建独立 Agent Project 和 initial Commit：
-   npx tsx setup.ts agent-init --workspace . --agent-name my-product
+   npm --prefix <skill-dir> run setup -- agent-init --workspace <dir> --agent-name my-product
 
 规则：
 - workspace/examples 下可同时存在实体目录和符号链接。
@@ -299,4 +309,4 @@ function main(): void {
 }
 
 const direct = process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
-if (direct) main();
+if (direct) runCli(main);

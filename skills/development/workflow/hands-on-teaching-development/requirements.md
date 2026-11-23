@@ -1,6 +1,5 @@
-# Hands-on Teaching Development — 需求基线 v1.0（v1.1 实现修订）
+# Hands-on Teaching Development — 需求基线
 
-- **版本**：1.0
 - **状态**：用户确认
 - **日期**：2026-11-19
 - **用途**：本文件是 Skill、配套脚本、模板实现和后续修改的需求基准。除非用户明确要求变更，不得擅自偏离。
@@ -39,14 +38,14 @@
 - 默认只读审查：可读取、分析、运行构建和测试、提取 Diff。
 - 用户明确要求直接移植 Agent 实现时，允许按第 8 节修改。
 - 用户明确要求保留半成品并让 AI 合并时，允许在用户确认的范围内修改。
-- 不要求每个步骤 Commit；用户通常在每个步骤 Review 通过后将当前步骤 `git add` 到暂存区，可能在多个步骤或一个模块完成后再自行 Commit。
+- 不要求每个步骤 Commit；每个步骤 Review 通过后，由 `review-diff.ts stage-reviewed`（或用户手工精确 `git add`）将本步骤文件加入暂存区，用户可在多个步骤或一个模块完成后自行 Commit。
 - Skill 不擅自创建 User Project Commit。
 
 ### 2.3 Agent Project（Agent 项目）
 
 - 用户最终想要实现的项目或产品，是双方持续演进的最终成果。
 - 由 AI 在其中编写参考实现、改进方案、中文教学注释和开发文档。
-- 每个小步骤单独创建 Git Commit。
+- 每个小步骤单独创建 Git Commit，但 Agent 可以在一个连续开发批次中先准备多个 Commit，用户之后逐 Commit 实现。
 - 用户手写实现通过 Review 后，同步到 Agent Project，并创建 `[user]` Commit。
 - 用户明确接受 Agent 实现时，也创建 `[user]` Commit，记录用户接受该实现。
 - Agent Project 始终拥有独立 Git 仓库，不继承 User Project 的 Git 历史。
@@ -126,7 +125,7 @@ workspace/
 - 不处理 User Project 嵌套在其他 Git 仓库中的情况。
 - 初始化阶段自动执行一次 `git add -A`，建立教学暂存区基线；不创建 Commit。
 - 该操作可能将现有未提交改动加入暂存区，这是用户明确批准的初始化行为。
-- 后续每个用户步骤 Review 通过后，由用户执行精确 `git add`。
+- 后续每个用户步骤 Review 通过后，通过 `review-diff.ts stage-reviewed`（或用户手工精确 `git add`）将本步骤文件加入暂存区。
 
 ## 6. Agent Project 初始化
 
@@ -150,7 +149,10 @@ Agent Project 内维护：
 docs/
 ├── development-plan.md
 ├── development-log.md
-└── teaching-state.md
+├── teaching-state.md
+├── NOTES.md
+├── MISSION.md
+└── RESOURCES.md
 ```
 
 ### 7.1 development-plan.md
@@ -163,25 +165,38 @@ docs/
 
 ### 7.3 teaching-state.md
 
-记录当前状态和跨会话恢复锚点：当前阶段、模块、步骤、Agent Commit、步骤文件清单、Review 状态、快照位置、是否待用户暂存、是否待同步、备份位置、待处理操作和阻塞事项。
+由 `progress.ts` 维护机器可读区块；分别记录 Agent 已准备的多个 Commit、User 已完成的步骤、当前教学队列、双游标与阻塞事项。跨会话只需读取轻量索引，必要时再按需展开详细开发日志。
 
-### 7.4 计划执行
+### 7.4 NOTES.md
+
+由 Agent 直接以 Markdown 维护（格式可按项目需要自由组织），持久记录经过用户确认的产品需求、工程/教学偏好、技术选择和纠偏。新旧规则冲突时明确废止或移出旧条目，保留简短历史便于追溯。单次 Review 选型、Agent 未确认的建议或短期教学反馈不得直接写入 `NOTES.md`。
+
+### 7.5 MISSION.md
+
+保持在一屏以内，记录产品动机、开发中希望掌握的关键能力、客观成功标准与当前边界。具体功能清单、设计与步骤仍归属 `development-plan.md`；目标变化前必须先征求用户确认。
+
+### 7.6 RESOURCES.md
+
+索引多个 Example Project 的路径、固定版本或 Git SHA、具体文件/方法定位、借鉴内容、局限与方案分歧。保持精简来源导航，不复制完整示例源码，也不替代详细开发计划。
+
+### 7.7 计划执行
 
 - 每次开始新模块/功能时，先询问用户本次优先级。
 - 用户可以要求提前或推迟模块；记录顺序变化和原因，不删除整体计划内容。
 - 一个小函数或独立小功能是默认步骤粒度。
 - 一个步骤可以涉及多个文件；复杂功能拆分；避免过度拆分。
 - Agent Project 每个步骤尽量对应一个独立 Commit。
+- 根据用户实际开发表现、Review 反馈或明确要求，Agent 可在 `teaching-state.md` 自由区块记录短期教学提示，轻量调整后续未准备批次的步骤粒度、讲解深度和重点；**不自动重写已提交的教学 Commit**，不对用户能力评分，不建立独立 `learning-records/` 学习档案。
 
 ## 8. 教学实现与两种学习方式
 
 ### 8.1 手写方式（默认）
 
-1. AI 在 Agent Project 实现一个小步骤。
+1. AI 在 Agent Project 可连续实现一个功能/模块的多个小步骤，分别提交多个独立 `[agent]` Commit，并登记批次队列。
 2. 新增/修改代码应补充中文教学型注释：解释重要函数职责、关键逻辑、设计原因、易误解机制；不要求每行注释。
 3. 执行必要构建和测试。
-4. Agent Project 创建 `[agent]` Commit。
-5. 告诉用户实现内容、文件位置、关键代码和原理，然后停止等待用户实现。
+4. 各小步骤均创建 `[agent]` Commit，不必每次提交后打断 Agent 开发。
+5. 批次开发完成后，登记 Commit 教学队列并汇报学习顺序，然后等待用户逐步实现。
 6. 用户提出疑问时正常解释；用户表示完成后进入 Review。
 
 ### 8.2 直接接受 Agent 实现
@@ -205,7 +220,7 @@ docs/
 ### 9.1 用户工作方式
 
 - 用户在 User Project 工作树中手写当前步骤，不要求先 Commit，也不要求 Review 前先暂存。
-- Review 通过后，用户按提示对本步骤涉及文件执行精确 `git add`。
+- Review 通过后，由 `review-diff.ts stage-reviewed`（或用户手工精确 `git add`）将本步骤涉及文件加入暂存区。
 - 用户可以多个步骤或一个模块后再自行创建 User Project Commit。
 
 ### 9.2 自动比较
@@ -213,8 +228,8 @@ docs/
 `review-diff.ts` 负责确定性比较。比较对象：
 
 1. User Project 当前工作树文件状态（包括未跟踪文件）。
-2. User Project Index 与 Agent 当前步骤 Commit 父版本的状态，用于确认比较基线。
-3. Agent Project 最新 `[agent]` Commit 对应步骤文件的最终状态。
+2. User Project Index 与**教学队列指定**的 Agent Commit 父版本状态比较，不使用最新 HEAD 代替当前步骤。
+3. Agent Project **当前待教学 `[agent]` Commit** 的最终状态（可以早于 HEAD）。
 
 不得只依赖原始 Diff 文本相等；应比较文件内容、存在状态、符号链接目标和可识别的文件模式。
 
@@ -229,16 +244,16 @@ docs/
 - 不把此前已暂存的完成步骤误当作本次工作区修改。
 - 不修改 User Project，不执行 `git add`。
 - 保存 Review 快照，记录本次文件状态、Agent Commit 和比较基线。
-- 用户 `git add` 后验证暂存区内容与 Review 快照一致；如果 Review 后文件又发生变化，要求重新 Review。
+- 暂存后验证暂存区内容与 Review 快照一致；如果 Review 后文件又发生变化，要求重新 Review。
 
-### 9.3 Review 通过与吸收
+### 9.3 Review 审计、选型与吸收
 
-1. AI 确认通过后，提示用户对本步骤文件执行精确 `git add`，不得使用 `git add .`。
-2. 运行 `review-diff.ts verify-staged` 验证暂存内容与 Review 快照一致。
-3. `sync-user.ts absorb` 将暂存且已验证的文件同步到 Agent Project。
-4. 更新 `development-log.md`、`development-plan.md` 和 `teaching-state.md`。
-5. Agent Project 创建 `[user]` Commit。
-6. 如果代码完全一致，没有代码内容需要变更，也必须更新开发记录并创建 `[user] docs(scope): ...` Commit，记录用户已完成手动实现。
+1. `review-diff.ts review` 首次 JSON 返回内联差异（`diffs.userVsAgent`、`diffs.userPatch`、`diffs.agentPatch`、`diffs.extraUserPatch`）及 `whitespaceOnlyCandidates`（超大补丁显式标记截断并保留报告文件）；缩进/空白候选仅作提示，不能跳过语言相关的语义审查。
+2. `EXACT_MATCH`：执行必要构建和测试后，可由 Agent 调用 `review-diff.ts stage-reviewed` 精确暂存当前步骤文件，保留已有暂存内容，无需用户手工 `git add`。
+3. `DIFFERENT`：不全盘自动吸收用户实现。Agent 根据 diff 审查正确性、逻辑、边界、风格及与后续已准备 Commit 的关系；对于实质方案差异，应对比 Agent/User 双方优劣、权衡风险与后续影响并给出**明确推荐方案与理由**（用户实现带来新启发时可列为待确认建议，不自动扩展产品范围）；纯风格或命名差异可简短说明，不必机械填表。经用户明确确认后，运行 `review-diff.ts decide --choice user|agent --reason "..."`（可选附带 `--recommend`、`--inspiration`）记录选型。存在未修复 Bug 时不得放行吸收。
+4. 用户选择 `user` 路线：执行 `review-diff.ts stage-reviewed` 精确暂存并校验（若用户手工 `git add` 或跨轮复核，则运行 `verify-staged`），再运行 `sync-user.ts absorb` 将差异代码同步到 Agent Project。`EXACT_MATCH` 不把旧步骤文件覆写回领先的 Agent `HEAD`；`DIFFERENT` 且与后续已准备 Commit 修改同一文件时，`absorb` 阻断覆盖，使用 `progress.ts pause` 记录原因并协调后续队列。
+5. 用户选择 `agent` 路线：不执行 `stage-reviewed` / `absorb`，按第 8.3 节通过 `sync-user.ts apply-agent` 备份用户未暂存工作区并应用当前待学 Commit Patch。
+6. 更新 `development-log.md`、`development-plan.md`、`teaching-state.md` 及其他发生变更的文档；通过 `progress.ts complete` 推进 User 游标（不改变其余已准备步骤），并用 `checkpoint.ts` 精确提交 `[user]` Commit。如果代码完全一致没有代码变更，也必须更新文档并创建 `[user] docs(scope): ...` Commit。
 
 ## 10. Commit 规范
 
@@ -264,7 +279,7 @@ docs/
 
 - Agent 实现使用 `[agent]`。
 - 吸收用户实现或记录用户接受 Agent 实现使用 `[user]`。
-- Agent Project 每个小步骤单独提交。
+- Agent Project 每个小步骤单独提交；允许一次连续开发多个提交的批次，不强制每个 Commit 后与用户交互。
 - 只暂存本次明确涉及的文件；提交前核对 staged 文件列表和 Diff。
 - 不提交 User Project。
 
@@ -282,7 +297,7 @@ docs/
 
 ## 12. 跨会话恢复与退出
 
-- 进入或继续教学时，先读取 `docs/teaching-state.md`、`development-plan.md`、`development-log.md` 最近记录。
+- 进入或继续教学时，先运行 `scripts/progress.ts status` 读取结构化教学状态、双游标和最近 Git 提交，再直接查阅精简的 `NOTES.md`（及按需读取 `MISSION.md` / `RESOURCES.md`），不需要全文读取开发日志。
 - 检查 Agent Project 和 User Project 的 Git 状态、当前 Review 快照、待同步步骤和工作区备份。
 - 保留所有未提交/未暂存差异，不因恢复会话自动清理。
 - 不重复执行已完成步骤；从当前锚点继续。
@@ -307,6 +322,7 @@ docs/
 | `backup-worktree.ts` | 创建/替换单份工作区备份、清理未暂存工作区、恢复备份 |
 | `sync-user.ts` | 吸收已审查的 User 实现；或备份后将 Agent Patch 应用到 User Project |
 | `checkpoint.ts` | 精确暂存 Agent Project 指定文件并创建规范 Commit |
+| `progress.ts` | Agent/User 双游标、批次队列自动收集与跨会话状态汇总 |
 
 脚本应使用 Node.js 标准库和 Git CLI，避免不必要的第三方依赖。运行环境建议 Node.js 20+，通过 `npx tsx` 执行。
 
@@ -321,13 +337,14 @@ docs/
 - 不自动修改 Git 全局配置。
 - 不为追求自动化而实现不必要的复杂框架。
 - 不在没有备份的情况下清理 User Project 工作区。
+- 不建立独立 `learning-records/`、掌握度档案或用户能力评分体系；本 Skill 以项目开发为核心，即时教学反馈归入 `development-log.md`，短期教学节奏归入 `teaching-state.md`。
 
-## 15. v1.1 修订（不改变 v1.0 用户确认的业务规则）
+## 15. 实现与安全细节约束
 
-- 将 Skill 内 `ref/AGENTS.md` 统一规范为 `references/AGENTS.md`，setup 首次复制到 workspace 根目录。
+- Skill 内 `references/AGENTS.md` 作为 workspace 级约束，首次初始化复制到 workspace 根目录，已有且内容不同时不覆盖。
 - Root Commit 按 Git 空树基线处理；merge commit 不属于单一步骤，明确拒绝。
 - Review 产出的 `user.patch` 和 `user-extra.patch` 包含未跟踪的新建文件（包括二进制与符号链接）。
 - Agent Patch 应用失败时，回滚必须恢复应用前完整 Index Tree，保留用户已暂存的旧步骤；不得运行会丢失暂存历史的普通 `git reset`。
-- 三份教学文档实际被修改时，必须和当前步骤代码一起由 `checkpoint.ts` 提交。
-- 新增 `node:test` 回归套件和预安装可执行的 `doctor.mjs` 环境检查。
-- 新增 `agents/openai.yaml`，声明 ChatGPT UI 元数据与显式调用策略（实际调用策略以宿主支持情况为准）。
+- 所有已修改的核心教学文档（`development-plan.md`、`development-log.md`、`teaching-state.md`、`NOTES.md`、`MISSION.md`、`RESOURCES.md`）必须随当步代码一起由 `checkpoint.ts` 精确提交；新 Agent Project 初始化自动创建模板，已有项目不覆盖原文档。
+- `progress.ts prepare` 以 SHA 固定已准备的教学队列，`progress.ts complete` 在 `[user]` 检查点前更新用户完成游标；`review-diff.ts` 与 `sync-user.ts` 接受教学队列中仍为当前 Git 历史祖先的 `[agent]` Commit，不强制等于 `HEAD`。
+- 提供 `node:test` 回归测试套件、预安装可执行的 `doctor.mjs` 环境自检，以及 `agents/openai.yaml` 宿主调用元数据。

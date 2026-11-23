@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, symlinkSync, readl
 import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
 import { join, dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { realPathIfExists, gitWriteTree } from "../scripts/common.ts";
 import { clearWorktreeWithBackup } from "../scripts/backup-worktree.ts";
 import { rollbackFailedAgentApply } from "../scripts/sync-user.ts";
@@ -15,10 +15,11 @@ const skillDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 function resolveNodeFlags() {
   if (process.env.TEACHING_NATIVE_TS === "1") return ["--experimental-strip-types"];
   try {
-    createRequire(import.meta.url).resolve("tsx");
-    return ["--import", "tsx"];
+    return ["--import", pathToFileURL(createRequire(import.meta.url).resolve("tsx")).href];
   } catch {
-    return ["--experimental-strip-types"];
+    const [major, minor] = process.versions.node.split(".").map(Number);
+    if (major > 22 || (major === 22 && minor >= 6)) return ["--experimental-strip-types"];
+    throw new Error("未检测到 tsx，且当前 Node 版本不支持 --experimental-strip-types");
   }
 }
 
@@ -235,6 +236,7 @@ test("end-to-end: review worktree, verify staged, absorb, document user checkpoi
   assert.equal(git(user, "rev-list", "--all", "--count").trim(), "0", "User Project must not auto-commit");
 });
 
+
 // Regression 11: nested Git repositories are reported as directory paths with a trailing slash.
 test("review reports nested untracked Git directories without crashing or copying nested .git", (t) => {
   const root = fixture(t);
@@ -253,6 +255,13 @@ test("review reports nested untracked Git directories without crashing or copyin
   assert.equal(readFileSync(result.reports.userExtraPatch).length, 0, "a nested repository directory is not representable as a regular file patch");
   assert.equal(existsSync(join(workspace, ".teaching", "review", "latest", "user-extra", "vendor", "lib")), false,
     "review must not recursively copy an embedded repository and its .git directory");
+
+  // backup-worktree must also tolerate embedded untracked Git directories and dangling symlink restores.
+  symlinkSync("missing-target", join(user, "dangling.link"));
+  script("backup-worktree.ts", "create", "--user-dir", user, "--workspace", workspace);
+  // Restoring when the exact same dangling symlink already exists must not throw EEXIST.
+  script("backup-worktree.ts", "restore", "--user-dir", user, "--workspace", workspace);
+  assert.equal(readlinkSync(join(user, "dangling.link")), "missing-target");
 });
 
 // Regression 12: checkpoint doc parsing must preserve both paths in rename-like status output.
@@ -275,4 +284,14 @@ test("checkpoint reports both paths when a core doc is replaced through an unsta
   assert.notEqual(fail.status, 0);
   assert.match(fail.stderr, /docs\/development-plan\.md/,
     "the deleted source document must not be truncated by porcelain rename parsing");
+});
+
+// Regression 13: doctor.mjs and run.mjs work zero-install on Node >= 22.6.
+test("doctor and zero-install runner succeed on Node >= 22.6 without node_modules", () => {
+  const [major, minor] = process.versions.node.split(".").map(Number);
+  if (major < 22 || (major === 22 && minor < 6)) return;
+  const docOut = call(process.execPath, [join(skillDir, "scripts", "doctor.mjs")]);
+  assert.match(docOut, /环境检查通过/);
+  const helpOut = call(process.execPath, [join(skillDir, "scripts", "run.mjs"), "progress.ts", "--help"]);
+  assert.match(helpOut, /progress\.ts/);
 });

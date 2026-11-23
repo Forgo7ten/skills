@@ -1,54 +1,29 @@
 # Teaching State
 
-> 当前状态快照，用于跨会话恢复。历史过程写入 `development-log.md`，整体计划写入 `development-plan.md`。
+> 以下 JSON 区块仅由 `scripts/progress.ts` 管理（双游标与批次队列）。跨会话先运行 `progress.ts status`，再按需阅读 `NOTES.md` 及其他文档。
 
-## 模式状态
+<!-- teaching-state-index:start -->
+{
+  "version": 2,
+  "updatedAt": "",
+  "agent": {
+    "latestPreparedCommit": null,
+    "preparedSteps": 0
+  },
+  "user": {
+    "completedSteps": 0,
+    "lastCompletedStep": null
+  },
+  "batch": null
+}
+<!-- teaching-state-index:end -->
 
-- **状态**：inactive
-- **最近更新时间**：待填写
-- **当前阶段**：初始化
+## 短期教学提示（Agent 自由维护，可选）
 
-## 项目路径
+<!-- 按开发过程中的实际观察自由记录当前阶段的讲解深度、后续未准备步骤的拆分粒度或需要重点说明的机制；不是对用户能力的永久评价，不因此改写已提交的教学 Commit。 -->
 
-- **Workspace**：待填写
-- **Example Projects**：待填写
-- **User Project 链接**：`user-project`
-- **User Project 实际路径**：待填写
-- **Agent Project**：待填写
+## 安全与恢复提醒
 
-## 计划锚点
-
-- **计划文件**：`docs/development-plan.md`
-- **当前模块**：无
-- **当前步骤**：无
-- **最近完成步骤**：无
-- **下一步**：等待制定计划
-
-## 当前步骤状态
-
-- **步骤 ID / 标题**：无
-- **Agent Commit**：无
-- **本步骤涉及文件**：`[]`
-- **用户实现状态**：未开始
-- **Review 状态**：未开始
-- **Review 快照**：无
-- **待用户暂存**：否
-- **待同步到 Agent Project**：否
-- **待创建 [user] Commit**：否
-
-## 安全与恢复状态
-
-- **最近工作区备份**：无
-- **备份路径**：`workspace/.teaching/backup/current`
-- **是否存在待恢复备份**：否
-- **是否存在未完成 Patch 应用**：否
-- **阻塞 / 待用户决策**：无
-
-## 恢复检查清单
-
-- [ ] 检查 Agent Project `git status --short`
-- [ ] 检查 User Project `git status --short`
-- [ ] 检查当前步骤对应的 Agent Commit
-- [ ] 检查 Review 快照是否仍有效
-- [ ] 检查是否存在待处理工作区备份
-- [ ] 确认后续动作不会覆盖用户未同步的内容
+- 当前状态区块与 Git 历史必须交叉验证；发现无法对齐的情况应先停下检查。
+- Review 快照位于 `workspace/.teaching/review/latest.json`，工作区备份位于 `workspace/.teaching/backup/current/`。
+- 对于尚无结构化索引的旧项目，先使用 `progress.ts init` 迁移，再人工核对旧进度和当前 Git Commit，不得自动猜测。

@@ -19,7 +19,7 @@ import {
   symlinkSync,
 } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
-import { arg, ensureNoPathCollision, gitRoot, parseCli, run } from "./common.ts";
+import { arg, ensureNoPathCollision, gitRoot, parseCli, run, runCli } from "./common.ts";
 
 export interface CopyStats {
   files: number;
@@ -145,4 +145,4 @@ function main(): void {
 }
 
 const direct = process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
-if (direct) main();
+if (direct) runCli(main);

@@ -6,10 +6,8 @@ import { fileURLToPath } from "node:url";
  */
 import {
   copyEntryNoFollow,
-  ensureParent,
   git,
   gitRoot,
-  gitText,
   gitStatus,
   gitWriteTree,
   parseNul,
@@ -17,7 +15,7 @@ import {
   arg,
   pathIn,
   readJson,
-  removePath,
+  runCli,
   writeJson,
 } from "./common.ts";
 import {
@@ -47,10 +45,23 @@ function defaultBackupDir(workspace: string): string {
   return join(resolve(workspace), ".teaching", "backup", "current");
 }
 
+function pathExistsIncludingDangling(path: string): boolean {
+  try {
+    lstatSync(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function listBackupUntrackedPaths(repo: string): string[] {
+  // Embedded untracked Git repos are reported with a trailing `/`; `git clean -fd` does not remove them either.
+  return parseNul(git(repo, ["ls-files", "--others", "--exclude-standard", "-z"])).filter((rel) => !rel.endsWith("/"));
+}
+
 function hasUnstagedChanges(repo: string): boolean {
   const trackedChanged = gitStatus(repo, ["diff", "--quiet"]) !== 0;
-  const untracked = git(repo, ["ls-files", "--others", "--exclude-standard", "-z"]);
-  return trackedChanged || untracked.length > 0;
+  return trackedChanged || listBackupUntrackedPaths(repo).length > 0;
 }
 
 function isSameEntry(source: string, destination: string): boolean {
@@ -84,7 +95,7 @@ export function createWorktreeBackup(userPath: string, workspace: string): { bac
 
   const patch = git(repo, ["diff", "--binary", "--no-ext-diff", "--no-color"]);
   writeFileSync(join(temp, "tracked.patch"), patch);
-  const untrackedPaths = parseNul(git(repo, ["ls-files", "--others", "--exclude-standard", "-z"]));
+  const untrackedPaths = listBackupUntrackedPaths(repo);
   for (const rel of untrackedPaths) {
     const source = pathIn(repo, rel);
     const destination = pathIn(join(temp, "untracked"), rel);
@@ -146,7 +157,7 @@ export function restoreWorktreeBackup(userPath: string, workspace: string): void
   for (const rel of manifest.untrackedPaths) {
     const source = pathIn(join(backupDir, "untracked"), rel);
     const destination = pathIn(repo, rel);
-    if (existsSync(destination) || (() => { try { lstatSync(destination); return true; } catch { return false; } })()) {
+    if (pathExistsIncludingDangling(destination)) {
       if (!isSameEntry(source, destination)) throw new Error(`恢复会覆盖现有文件，已停止：${rel}`);
     }
   }
@@ -155,7 +166,7 @@ export function restoreWorktreeBackup(userPath: string, workspace: string): void
   for (const rel of manifest.untrackedPaths) {
     const source = pathIn(join(backupDir, "untracked"), rel);
     const destination = pathIn(repo, rel);
-    if (!existsSync(destination)) copyEntryNoFollow(source, destination);
+    if (!pathExistsIncludingDangling(destination)) copyEntryNoFollow(source, destination);
   }
   console.log(indexChanged
     ? `已在当前 Index 基础上恢复工作区备份（Index 已变化，但 Patch 可无冲突应用）：${backupDir}`
@@ -216,4 +227,4 @@ function main(): void {
 }
 
 const direct = process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
-if (direct) main();
+if (direct) runCli(main);
